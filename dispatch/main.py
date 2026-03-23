@@ -42,19 +42,15 @@ async def lifespan(app: FastAPI):
     Shutdown: drain Redis, dispose engine, log shutdown receipt.
     """
     # — Startup —
-    # Run database migrations on startup (idempotent — safe every boot)
-    import subprocess as _sp
+    # Create all tables on startup (idempotent — safe every boot)
     try:
-        _r = _sp.run(
-            ["alembic", "upgrade", "head"],
-            capture_output=True, text=True, cwd="/app"
-        )
-        if _r.returncode == 0:
-            print(f"[DISPATCH] Migrations OK: {_r.stdout.strip() or 'already at head'}")
-        else:
-            print(f"[DISPATCH] WARNING: Migration error: {_r.stderr.strip()}")
+        from dispatch.database import Base, engine
+        from dispatch.models import task, crew_member, receipt  # noqa: F401
+        async with engine.begin() as _conn:
+            await _conn.run_sync(Base.metadata.create_all)
+        print("[DISPATCH] Tables created/verified — schema ready")
     except Exception as _e:
-        print(f"[DISPATCH] WARNING: Could not run migrations: {_e}")
+        print(f"[DISPATCH] WARNING: Could not create tables: {_e}")
 
     await init_redis()
     app.state.redis = redis_pool
