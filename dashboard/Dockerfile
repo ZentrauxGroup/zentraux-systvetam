@@ -30,6 +30,7 @@ FROM nginx:alpine AS runner
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx config
+RUN apk add --no-cache gettext
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Railway uses dynamic PORT
@@ -37,4 +38,4 @@ ENV PORT=3000
 EXPOSE 3000
 
 # Substitute PORT in nginx config at runtime
-CMD ["sh", "-c", "sed -i "s/\$PORT/$PORT/g" /etc/nginx/conf.d/default.conf && nginx -g "daemon off;""]
+CMD sh -c "envsubst '\$PORT' < /etc/nginx/conf.d/default.conf > /tmp/default.conf && mv /tmp/default.conf /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
