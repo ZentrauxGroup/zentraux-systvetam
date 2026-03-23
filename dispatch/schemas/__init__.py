@@ -1,0 +1,1 @@
+"""SYSTVETAM — Pydantic Schemas"""

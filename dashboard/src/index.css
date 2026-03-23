@@ -1,0 +1,89 @@
+/* SYSTVETAM — Global Styles | ZEN-CIRCUIT Design System */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fonts — loaded from CDN */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #0A0A0F;
+    color: rgba(248, 248, 240, 0.85);
+    overflow: hidden;
+  }
+
+  /* Scrollbar — dark glass aesthetic */
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(201, 168, 76, 0.3);
+  }
+
+  /* Selection — gold accent */
+  ::selection {
+    background: rgba(201, 168, 76, 0.3);
+    color: #F8F8F0;
+  }
+}
+
+@layer components {
+  /* Glass panel — reusable card surface */
+  .glass-panel {
+    @apply bg-glass border border-glass-border rounded-circuit backdrop-blur-xs;
+  }
+
+  /* Gold accent border on hover */
+  .glass-panel-interactive {
+    @apply glass-panel transition-all duration-200
+           hover:bg-glass-hover hover:border-gold/20 hover:shadow-glass-hover;
+  }
+
+  /* Form field — dark glass input */
+  .field-input {
+    @apply w-full px-3 py-2.5 rounded-circuit
+           bg-obsidian border border-glass-border
+           text-sm font-mono text-glass-text
+           placeholder:text-glass-muted/40
+           focus:outline-none focus:border-gold/30
+           transition-colors;
+  }
+
+  /* Select dropdown fix for dark backgrounds */
+  .field-input option {
+    @apply bg-obsidian-panel text-glass-text;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar — used by CrewPulseBar, ReceiptFeed */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -1,0 +1,43 @@
+# SYSTVETAM — Central Dispatch Dependencies
+# Zentraux Group LLC | Pinned for reproducible builds
+# Python 3.12+
+
+# --- Core Framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# --- Database (async PostgreSQL) ---
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.1
+greenlet==3.1.1
+
+# --- Redis (pub/sub + message bus) ---
+redis[hiredis]==5.2.1
+
+# --- Auth (JWT + RBAC) ---
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+
+# --- WebSocket ---
+websockets==14.1
+
+# --- HTTP client (agent mesh + OpenRouter calls) ---
+httpx==0.28.1
+
+# --- Docker SDK (crew container management) ---
+docker==7.1.0
+
+# --- Date/time (receipt timestamps — Phoenix MST) ---
+python-dateutil==2.9.0.post0
+
+# --- Structured logging ---
+structlog==24.4.0
+
+# --- Testing ---
+pytest==8.3.4
+pytest-asyncio==0.24.0
+anyio==4.7.0

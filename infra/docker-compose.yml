@@ -1,0 +1,133 @@
+# SYSTVETAM — Docker Compose (Local Development)
+# Zentraux Group LLC
+#
+# The full local dev stack. Four services on zos-mesh network.
+# Agent mesh containers (16 crew) spin up on-demand via container_manager.py
+# and attach to zos-mesh — they are NOT defined here.
+#
+# Usage:
+#   make up        → start all services
+#   make down      → stop all services
+#   make logs      → tail dispatch logs
+#   make migrate   → run alembic migrations
+#   make clean     → stop + destroy volumes (nuclear option)
+
+version: "3.9"
+
+networks:
+  zos-mesh:
+    driver: bridge
+    name: zos-mesh
+
+volumes:
+  postgres_data:
+    name: systvetam_postgres_data
+  redis_data:
+    name: systvetam_redis_data
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — persistence layer
+  # State machine constraints enforced here at the DB level.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: systvetam-postgres
+    environment:
+      POSTGRES_DB: systvetam
+      POSTGRES_USER: zos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-systvetam_dev_2026}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - zos-mesh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zos -d systvetam"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Redis — pub/sub message bus
+  # Every state transition, receipt, and gate event publishes here.
+  # Tower Dashboard consumes via WebSocket relay.
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: systvetam-redis
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - zos-mesh
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Central Dispatch — the spine
+  # FastAPI 0.115+ | Routes tasks | Enforces state machine | Generates receipts
+  # Exposed via: api.zentrauxgroup.com (Cloudflare tunnel in production)
+  # ---------------------------------------------------------------------------
+  dispatch:
+    build:
+      context: ../dispatch
+      dockerfile: Dockerfile
+    container_name: systvetam-dispatch
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://zos:${POSTGRES_PASSWORD:-systvetam_dev_2026}@postgres:5432/systvetam
+      REDIS_URL: redis://redis:6379
+      ZOS_ENV: development
+      DISPATCH_URL: http://localhost:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - zos-mesh
+    volumes:
+      # Live reload in dev — mount source code
+      - ../dispatch:/app/dispatch:ro
+      # Docker socket for crew container management
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Tower Dashboard — React 18 + TypeScript + Vite
+  # The command surface. Gesture-native. Mobile-first.
+  # WebSocket: ws://localhost:8000/ws (connects to Dispatch)
+  # ---------------------------------------------------------------------------
+  tower-dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    container_name: systvetam-dashboard
+    environment:
+      VITE_DISPATCH_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000/ws
+    ports:
+      - "3000:3000"
+    depends_on:
+      - dispatch
+    networks:
+      - zos-mesh
+    restart: unless-stopped

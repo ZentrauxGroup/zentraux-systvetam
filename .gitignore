@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+*.env
+
+# Node
+node_modules/
+dist/
+.next/
+.cache/
+
+# Logs
+*.log
+logs/
+
+# Docker
+*.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Alembic
+# (keep migrations — do NOT gitignore)
+
+# Secrets
+*.pem
+*.key
+secrets.json
+
+# Railway
+.railway/
