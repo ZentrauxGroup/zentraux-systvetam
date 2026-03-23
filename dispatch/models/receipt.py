@@ -118,9 +118,9 @@ class Receipt(Base):
     # -----------------------------------------------------------------------
 
     __table_args__ = (
-        Index("ix_receipts_type_created", "receipt_type", "created_at desc"),
+        Index("ix_receipts_type_created", "receipt_type", text("created_at DESC")),
         Index("ix_receipts_task_id", "task_id"),
-        Index("ix_receipts_created_desc", "created_at desc"),
+        Index("ix_receipts_created_desc", text("created_at DESC")),
     )
 
     def __repr__(self) -> str:
