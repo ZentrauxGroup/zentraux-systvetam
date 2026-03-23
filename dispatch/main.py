@@ -45,11 +45,16 @@ async def lifespan(app: FastAPI):
     await init_redis()
     app.state.redis = redis_pool
 
-    # Verify Postgres is reachable (fail-fast on bad config)
-    async with engine.begin() as conn:
-        await conn.execute(
-            __import__("sqlalchemy").text("SELECT 1")
-        )
+    # Verify Postgres is reachable (non-fatal — app starts even if DB is warming up)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                __import__("sqlalchemy").text("SELECT 1")
+            )
+        print("[DISPATCH] Postgres reachable — startup verified")
+    except Exception as e:
+        print(f"[DISPATCH] WARNING: Postgres unreachable at startup: {e}")
+        print("[DISPATCH] Continuing — /health will serve, /status will report degraded")
 
     # Publish system boot event on Redis for any Tower Dashboard listeners
     if redis_pool:
