@@ -40,6 +40,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -251,7 +252,7 @@ class Task(Base):
             "task_type IN ("
             "'STANDARD','INTELLIGENCE_BRIEF','BUILD_FROM_INTEL',"
             "'OPPORTUNITY','GTM_CAMPAIGN','VOICE_OUTREACH',"
-            "'SECURITY_REVIEW','QA_EVALUATION'"
+            "'SECURITY_REVIEW','QA_EVALUATION','CHANGE_REQUEST'"
             ")",
             name="valid_task_type",
         ),
@@ -264,7 +265,7 @@ class Task(Base):
         Index("ix_tasks_status_priority", "status", "priority"),
         Index("ix_tasks_assigned_status", "assigned_to", "status"),
         Index("ix_tasks_department_status", "department", "status"),
-        Index("ix_tasks_created_desc", "created_at desc"),
+        Index("ix_tasks_created_desc", text("created_at DESC")),
     )
 
     def __repr__(self) -> str:
