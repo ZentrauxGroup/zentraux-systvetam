@@ -42,6 +42,20 @@ async def lifespan(app: FastAPI):
     Shutdown: drain Redis, dispose engine, log shutdown receipt.
     """
     # — Startup —
+    # Run database migrations on startup (idempotent — safe every boot)
+    import subprocess as _sp
+    try:
+        _r = _sp.run(
+            ["alembic", "upgrade", "head"],
+            capture_output=True, text=True, cwd="/app"
+        )
+        if _r.returncode == 0:
+            print(f"[DISPATCH] Migrations OK: {_r.stdout.strip() or 'already at head'}")
+        else:
+            print(f"[DISPATCH] WARNING: Migration error: {_r.stderr.strip()}")
+    except Exception as _e:
+        print(f"[DISPATCH] WARNING: Could not run migrations: {_e}")
+
     await init_redis()
     app.state.redis = redis_pool
 
@@ -93,18 +107,24 @@ app = FastAPI(
 # CORS — locked to known origins in production
 # ---------------------------------------------------------------------------
 
-ALLOWED_ORIGINS: list[str] = [
-    "https://tower.zentrauxgroup.com",
-    "https://api.zentrauxgroup.com",
-]
-
-if settings.ZOS_ENV == "development":
-    ALLOWED_ORIGINS += [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
+# Read CORS_ORIGINS from env if set (supports "*" or comma-separated list)
+_cors_env = getattr(settings, "CORS_ORIGINS", None)
+if _cors_env and _cors_env.strip() == "*":
+    ALLOWED_ORIGINS: list[str] = ["*"]
+elif _cors_env:
+    ALLOWED_ORIGINS: list[str] = [o.strip() for o in _cors_env.split(",")]
+else:
+    ALLOWED_ORIGINS: list[str] = [
+        "https://tower.zentrauxgroup.com",
+        "https://api.zentrauxgroup.com",
     ]
+    if settings.ZOS_ENV == "development":
+        ALLOWED_ORIGINS += [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+        ]
 
 app.add_middleware(
     CORSMiddleware,
