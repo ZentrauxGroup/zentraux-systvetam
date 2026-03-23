@@ -66,7 +66,7 @@ export type TaskStatus =
 export type TaskType =
   | 'STANDARD' | 'INTELLIGENCE_BRIEF' | 'BUILD_FROM_INTEL'
   | 'OPPORTUNITY' | 'GTM_CAMPAIGN' | 'VOICE_OUTREACH'
-  | 'SECURITY_REVIEW' | 'QA_EVALUATION';
+  | 'SECURITY_REVIEW' | 'QA_EVALUATION' | 'CHANGE_REQUEST';
 
 export interface Task {
   id: string;
