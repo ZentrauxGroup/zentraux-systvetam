@@ -43,14 +43,10 @@ async def lifespan(app: FastAPI):
     """
     # — Startup —
 
-    # Block 1: Create all tables on startup (idempotent — safe every boot)
+    # Block 1: ENUM types only — tables are managed by Alembic pre-start
     try:
         from sqlalchemy import text as _text
-        from dispatch.database import Base, engine
-        from dispatch.models import task, crew_member, receipt  # noqa: F401
         async with engine.begin() as _conn:
-            # Pre-create PostgreSQL ENUM types with duplicate protection
-            # Prevents create_all failure when types exist from previous deploys
             _enum_stmts = [
                 """DO $$ BEGIN
                 CREATE TYPE crew_status AS ENUM ('ACTIVE','IDLE','EXECUTING','ERROR','OFFLINE');
@@ -75,11 +71,10 @@ async def lifespan(app: FastAPI):
             ]
             for _stmt in _enum_stmts:
                 await _conn.execute(_text(_stmt))
-            print("[DISPATCH] ENUM types verified/created")
-            await _conn.run_sync(Base.metadata.create_all)
-        print("[DISPATCH] Tables created/verified — schema ready")
+        print("[DISPATCH] ENUM types verified/created")
+        print("[DISPATCH] Schema managed by Alembic — tables pre-created at container start")
     except Exception as _e:
-        print(f"[DISPATCH] WARNING: Could not create tables: {_e}")
+        print(f"[DISPATCH] ENUM warning: {_e}")
 
     # Block 2: Auto-seed crew on first boot (idempotent — skips if crew exists)
     try:
@@ -92,7 +87,7 @@ async def lifespan(app: FastAPI):
             print("[DISPATCH] No crew found — running seed script...")
             import sys
             sys.path.insert(0, "/app")
-            from scripts.seed_crew import seed_crew
+            from dispatch.scripts.seed_crew import seed_crew
             await seed_crew()
             print("[DISPATCH] Crew seeded — 16 operators online")
         else:

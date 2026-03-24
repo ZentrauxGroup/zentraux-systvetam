@@ -3,6 +3,9 @@
 #
 # Multi-stage build. Python 3.12 slim. No bloat.
 # Runs on Railway (production) and Docker Compose (local dev).
+#
+# Alembic migrations run BEFORE uvicorn starts — tables guaranteed
+# to exist before the app accepts its first request.
 
 FROM python:3.12-slim AS base
 
@@ -33,4 +36,6 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
 
 EXPOSE 8000
 
-CMD uvicorn dispatch.main:app --host 0.0.0.0 --port ${PORT:-8000} --ws-ping-interval 30 --ws-ping-timeout 10
+# Pre-start: Alembic runs from /app/dispatch where alembic.ini lives.
+# Then uvicorn starts the app. Tables are guaranteed before first request.
+CMD sh -c 'cd /app/dispatch && alembic upgrade head && uvicorn dispatch.main:app --host 0.0.0.0 --port ${PORT:-8000} --ws-ping-interval 30 --ws-ping-timeout 10'
