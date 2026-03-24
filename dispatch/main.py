@@ -42,15 +42,18 @@ async def lifespan(app: FastAPI):
     Shutdown: drain Redis, dispose engine, log shutdown receipt.
     """
     # — Startup —
-    # Create all tables on startup (idempotent — safe every boot)
+
+    # Block 1: Create all tables on startup (idempotent — safe every boot)
     try:
         from dispatch.database import Base, engine
         from dispatch.models import task, crew_member, receipt  # noqa: F401
         async with engine.begin() as _conn:
             await _conn.run_sync(Base.metadata.create_all)
         print("[DISPATCH] Tables created/verified — schema ready")
+    except Exception as _e:
+        print(f"[DISPATCH] WARNING: Could not create tables: {_e}")
 
-    # Auto-seed crew on first boot (idempotent — skips existing callsigns)
+    # Block 2: Auto-seed crew on first boot (idempotent — skips if crew exists)
     try:
         from sqlalchemy import select, func
         from dispatch.models.crew_member import CrewMember
@@ -68,8 +71,6 @@ async def lifespan(app: FastAPI):
             print(f"[DISPATCH] Crew roster: {crew_count} operators present — skipping seed")
     except Exception as _seed_err:
         print(f"[DISPATCH] WARNING: Auto-seed failed: {_seed_err}")
-    except Exception as _e:
-        print(f"[DISPATCH] WARNING: Could not create tables: {_e}")
 
     await init_redis()
     app.state.redis = redis_pool
@@ -122,9 +123,6 @@ app = FastAPI(
 # CORS — locked to known origins in production
 # ---------------------------------------------------------------------------
 
-# Use settings.allowed_origins_list — reads ALLOWED_ORIGINS env var,
-# falls back to tower.zentrauxgroup.com + api.zentrauxgroup.com in production,
-# adds localhost variants in development.
 ALLOWED_ORIGINS: list[str] = settings.allowed_origins_list
 
 app.add_middleware(
@@ -199,7 +197,6 @@ app.include_router(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    # Import here to avoid circular dependency at module load
     from dispatch.state_machine import DoctrineViolation
 
     if isinstance(exc, DoctrineViolation):
@@ -212,7 +209,6 @@ async def global_exception_handler(request: Request, exc: Exception):
             },
         )
 
-    # Unhandled errors — log and return 500 without leaking internals
     return JSONResponse(
         status_code=500,
         content={
