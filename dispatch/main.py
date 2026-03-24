@@ -49,6 +49,25 @@ async def lifespan(app: FastAPI):
         async with engine.begin() as _conn:
             await _conn.run_sync(Base.metadata.create_all)
         print("[DISPATCH] Tables created/verified — schema ready")
+
+    # Auto-seed crew on first boot (idempotent — skips existing callsigns)
+    try:
+        from sqlalchemy import select, func
+        from dispatch.models.crew_member import CrewMember
+        async with async_session_factory() as _seed_session:
+            result = await _seed_session.execute(select(func.count()).select_from(CrewMember))
+            crew_count = result.scalar()
+        if crew_count == 0:
+            print("[DISPATCH] No crew found — running seed script...")
+            import sys
+            sys.path.insert(0, "/app")
+            from scripts.seed_crew import seed_crew
+            await seed_crew()
+            print("[DISPATCH] Crew seeded — 16 operators online")
+        else:
+            print(f"[DISPATCH] Crew roster: {crew_count} operators present — skipping seed")
+    except Exception as _seed_err:
+        print(f"[DISPATCH] WARNING: Auto-seed failed: {_seed_err}")
     except Exception as _e:
         print(f"[DISPATCH] WARNING: Could not create tables: {_e}")
 
