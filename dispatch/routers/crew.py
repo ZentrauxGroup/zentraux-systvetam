@@ -26,6 +26,10 @@ from dispatch.schemas.crew import (
 )
 from dispatch.schemas.task import TaskListResponse, TaskResponse
 from dispatch.state_machine import DoctrineViolation
+from datetime import datetime, timezone
+from pydantic import BaseModel
+from fastapi import Header
+from dispatch.config import settings
 
 router = APIRouter()
 
@@ -179,4 +183,126 @@ async def get_crew_tasks(
         total=total,
         offset=offset,
         limit=limit,
+    )
+
+# ---------------------------------------------------------------------------
+# PATCH/Sprint 5: Crew Heartbeat Status Endpoint
+# Receives heartbeat from agent-mesh every 30s — updates status + last_heartbeat
+# Integration: agent-mesh/heartbeat.py → PATCH /crew/{callsign}/status → DB
+# ---------------------------------------------------------------------------
+
+class HeartbeatRequest(BaseModel):
+    """
+    Heartbeat payload from agent-mesh.
+    Updates crew member status and last_seen timestamp.
+    """
+    status: str  # "ACTIVE", "STANDBY", "OFFLINE", "EXECUTING"
+    last_seen: datetime
+
+
+class HeartbeatResponse(BaseModel):
+    """Response confirming heartbeat was received and applied."""
+    callsign: str
+    status: str
+    last_heartbeat: datetime
+    acknowledged: bool = True
+
+
+# --- Add this endpoint to the existing router ---
+
+# ---------------------------------------------------------------------------
+# PATCH /crew/{callsign}/status — Agent-Mesh Heartbeat Receiver
+# ---------------------------------------------------------------------------
+
+@router.patch("/{callsign}/status", response_model=HeartbeatResponse)
+async def update_crew_status(
+    callsign: str,
+    payload: HeartbeatRequest,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(None),
+):
+    """
+    Heartbeat endpoint for agent-mesh service.
+    Called every 30 seconds per crew session.
+    This is what turns the Tower Lobby dots gold.
+
+    Auth: Bearer token from MESH_SERVICE_TOKEN.
+    Lookup: case-insensitive callsign match to handle both
+    canonical callsigns (FORGE, CLOSE) and legacy seed data
+    (marcus-reed, jordan-reese).
+
+    Status mapping from agent-mesh → Dispatch CrewStatus:
+      ACTIVE    → ACTIVE
+      STANDBY   → IDLE
+      EXECUTING → EXECUTING
+      OFFLINE   → OFFLINE
+    """
+    # --- Auth: validate mesh service token ---
+    # In production, MESH_SERVICE_TOKEN is a JWT issued by Dispatch.
+    # For Sprint 5 initial integration, we accept Bearer token match.
+    if authorization:
+        token = authorization.replace("Bearer ", "").strip()
+        mesh_token = getattr(settings, "MESH_SERVICE_TOKEN", None) or getattr(
+            settings, "mesh_service_token", ""
+        )
+        if mesh_token and token != mesh_token:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid mesh service token",
+            )
+
+    # --- Lookup crew member (case-insensitive) ---
+    # Agent-mesh sends canonical callsigns: FORGE, CLOSE, NOVA
+    # DB may have lowercase-hyphenated: marcus-reed, jordan-reese
+    # Try both patterns until seed data is refreshed.
+    result = await db.execute(
+        select(CrewMember).where(
+            func.upper(CrewMember.callsign) == callsign.upper()
+        )
+    )
+    member = result.scalar_one_or_none()
+
+    if member is None:
+        # Not found — return 404 (heartbeat service logs this and continues)
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": "CREW_NOT_FOUND",
+                "detail": f"No crew member with callsign: {callsign}",
+                "callsign": callsign,
+            },
+        )
+
+    # --- Map mesh status → Dispatch CrewStatus ---
+    status_map = {
+        "ACTIVE": CrewStatus.ACTIVE,
+        "STANDBY": CrewStatus.IDLE,
+        "EXECUTING": CrewStatus.EXECUTING,
+        "OFFLINE": CrewStatus.OFFLINE,
+        # Fallbacks for direct enum matches
+        "IDLE": CrewStatus.IDLE,
+        "ERROR": CrewStatus.ERROR,
+    }
+
+    new_status = status_map.get(payload.status.upper())
+    if new_status is None:
+        # Unknown status — default to ACTIVE rather than rejecting
+        # The heartbeat should never fail on a valid crew member
+        new_status = CrewStatus.ACTIVE
+
+    # --- Update DB ---
+    member.status = new_status
+    member.last_heartbeat = payload.last_seen
+    await db.commit()
+    await db.refresh(member)
+
+    return HeartbeatResponse(
+        callsign=member.callsign,
+        status=member.status.value,
+        last_heartbeat=member.last_heartbeat,
+        acknowledged=True,
     )

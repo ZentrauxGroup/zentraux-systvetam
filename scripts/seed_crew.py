@@ -3,10 +3,12 @@ SYSTVETAM — Crew Seed Script
 Zentraux Group LLC
 
 Seeds all 16 crew members into the database from the canonical roster.
-Source of truth: Engineering Directive v1.0 file structure + ZOS v1.1 Appendix D
-+ Addendum v1.1 department floor mapping.
+Source of truth: ROLE__INDEX__v02.md — canonical callsigns and identities.
 
 Idempotent: skips any callsign that already exists.
+
+Callsigns use canonical format (FORGE, CLOSE, NOVA, etc.) — matching
+the agent-mesh CREW_REGISTRY and ROLE__INDEX__v02.md exactly.
 
 Usage:
   make seed
@@ -23,7 +25,6 @@ import sys
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Ensure dispatch package is importable
 sys.path.insert(0, "/app")
 
 from dispatch.config import settings
@@ -36,16 +37,24 @@ logger = logging.getLogger("seed_crew")
 
 # ---------------------------------------------------------------------------
 # Canonical Crew Roster — 16 operators
-#
-# Source: Engineering Directive v1.0 agent-mesh/crew/ file list
-#         ZOS v1.1 Appendix D — AGT Registry
-#         Addendum v1.1 — Department floor mapping
+# Source: ROLE__INDEX__v02.md — single source of truth
+# Excludes: AGT-001 (FOUNDER/Levi) and ZENTRAUX (Agent Zero Orchestrator)
 # ---------------------------------------------------------------------------
 
 CREW_ROSTER: list[dict] = [
-    # === HQ / Strategy & Governance ===
+    # AGT-002 | NOVA | Strategy
     {
-        "callsign": "tori-delgado",
+        "callsign": "NOVA",
+        "display_name": "Dr. Isabella Reyes",
+        "role": "Chief Strategy Officer",
+        "department": "STRATEGY",
+        "execution_plane": "cloud",
+        "sop_reference": "L0-STRATEGY",
+        "bio": "Strategic direction and market positioning. Owns competitive analysis, category definition, and board interface. Escalation: → Levi.",
+    },
+    # AGT-003 | ANCHOR | Governance
+    {
+        "callsign": "ANCHOR",
         "display_name": "Victoria 'Tori' Langford",
         "role": "Board Director / Governance QA",
         "department": "GOVERNANCE",
@@ -53,151 +62,145 @@ CREW_ROSTER: list[dict] = [
         "sop_reference": "L0-GOVERNANCE",
         "bio": "Board-level governance authority. Co-equal with Levi on Major/Emergency escalations. Owns doctrine compliance and QA sign-off.",
     },
+    # AGT-004 | KIM | Finance
     {
-        "callsign": "nova-sterling",
-        "display_name": "Dr. Isabella 'NOVA' Reyes",
-        "role": "Chief Strategy Officer",
-        "department": "STRATEGY",
-        "execution_plane": "cloud",
-        "sop_reference": "L0-STRATEGY",
-        "bio": "Strategic direction and market positioning. Owns competitive analysis, category definition, and board interface.",
-    },
-    {
-        "callsign": "maestra-voss",
-        "display_name": "Maestra Voss",
-        "role": "Doctrine Architect / Governance Enforcer",
-        "department": "GOVERNANCE",
-        "execution_plane": "cloud",
-        "sop_reference": "L0-GOVERNANCE",
-        "bio": "Governance enforcement and doctrine integrity. Ensures all operations meet ZOS standards.",
-    },
-
-    # === Engineering Core ===
-    {
-        "callsign": "marcus-reed",
-        "display_name": "Marcus Reed",
-        "role": "CTO / Lead Architect",
-        "department": "ENGINEERING",
-        "execution_plane": "cloud",
-        "sop_reference": "SOP-ENG-001",
-        "bio": "Engineering authority. Owns all system architecture, code review, and technical direction. Escalation path: → Levi.",
-    },
-    {
-        "callsign": "sophia-navarro",
-        "display_name": "Sophia Navarro",
-        "role": "Platform Engineer / Design Authority",
-        "department": "ENGINEERING",
-        "execution_plane": "cloud",
-        "sop_reference": "SOP-ENG-001",
-        "bio": "Frontend architecture, design system, and UX authority. ZEN-CIRCUIT token system owner. Escalation: → Marcus.",
-    },
-    {
-        "callsign": "jax-harlow",
-        "display_name": "Jaxon 'Jax' Harlow",
-        "role": "Sr. AI/ML Engineer / Security Reviewer",
-        "department": "ENGINEERING",
-        "execution_plane": "cloud",
-        "sop_reference": "SOP-ENG-001",
-        "bio": "AI/ML engineering and rolling security review on all builds. Owns model selection and inference optimization. Escalation: → Marcus.",
-    },
-    {
-        "callsign": "riley-chen",
-        "display_name": "Riley Chen",
-        "role": "QA Gate Engineer",
-        "department": "ENGINEERING",
-        "execution_plane": "cloud",
-        "sop_reference": "SOP-008",
-        "bio": "QA gate authority. No build advances past QA without Riley sign-off. Owns test coverage, SOP-008 evaluation, and receipt bundle prep.",
-    },
-    {
-        "callsign": "noah-prescott",
-        "display_name": "Dr. Noah Prescott",
-        "role": "AI Research Lead / Spec Author",
-        "department": "ENGINEERING",
-        "execution_plane": "cloud",
-        "sop_reference": "SOP-ENG-001",
-        "bio": "Research direction and specification authorship. Translates intelligence briefs into engineering specs. Escalation: → Marcus.",
-    },
-    {
-        "callsign": "rye-callahan",
-        "display_name": "Rye Callahan",
-        "role": "DevOps / Infrastructure Engineer",
-        "department": "ENGINEERING",
-        "execution_plane": "cloud",
-        "sop_reference": "SOP-INFRA-001",
-        "bio": "Infrastructure authority. Docker, Railway, Cloudflare tunnel, CI/CD. Owns deployment pipeline and container orchestration.",
-    },
-    {
-        "callsign": "len-zhao",
-        "display_name": "Lena 'Len' Zhao",
-        "role": "QA Verification Lead",
-        "department": "ENGINEERING",
-        "execution_plane": "cloud",
-        "sop_reference": "SOP-008",
-        "bio": "QA verification and test automation. Partners with Riley on gate evaluations. Owns regression testing and hallucination detection.",
-    },
-
-    # === Intelligence Core ===
-    {
-        "callsign": "clyde-nakamura",
-        "display_name": "Clyde Nakamura",
-        "role": "Market Intelligence Engine / Hacker",
-        "department": "INTELLIGENCE",
-        "execution_plane": "cloud",
-        "container_port": 8006,
-        "sop_reference": "SOP-INTEL-001",
-        "bio": "Eyes on the street. Runs continuous scraping ops, classifies friction signals, generates Opportunity Briefs. Ships fast, fails cheap, scales what works.",
-    },
-
-    # === GTM Engine ===
-    {
-        "callsign": "jordan-reese",
-        "display_name": "Jordan Reese",
-        "role": "Head of Commercial / Closer",
-        "department": "GTM",
-        "execution_plane": "cloud",
-        "sop_reference": "SOP-GTM-001",
-        "bio": "Revenue authority. Owns pipeline, outreach, deal close. Escalation: → Levi. Voice clips via ElevenLabs. Territory: Arizona first.",
-    },
-    {
-        "callsign": "taylor-moss",
-        "display_name": "Taylor Moss",
-        "role": "Sales & GTM Lead / Content Strategist",
-        "department": "GTM",
-        "execution_plane": "cloud",
-        "sop_reference": "SOP-GTM-001",
-        "bio": "Demand generation and proof asset creation. MQL handoff packages, case studies, LinkedIn ABM campaigns. Escalation: → Jordan.",
-    },
-
-    # === Delivery & Customer ===
-    {
-        "callsign": "alex-harris",
-        "display_name": "Alex Harris",
-        "role": "Head of Delivery & Operations / Support",
-        "department": "DELIVERY",
-        "execution_plane": "cloud",
-        "sop_reference": "SOP-DELIVERY-001",
-        "bio": "Client engagement lifecycle. Technical support, incident management, knowledge base. First responder for customer-facing issues.",
-    },
-
-    # === Finance & Admin Ops ===
-    {
-        "callsign": "maya-lin",
-        "display_name": "Maya Lin",
-        "role": "Customer Success Lead / Financial Analyst",
-        "department": "FINANCE",
-        "execution_plane": "cloud",
-        "sop_reference": "SOP-FIN-001",
-        "bio": "Customer success and financial analysis. Owns churn prevention, usage analytics, and MRR reporting.",
-    },
-    {
-        "callsign": "kim-sato",
-        "display_name": "Kimberly 'Kim' Sato",
+        "callsign": "KIM",
+        "display_name": "Kimberly Harlan",
         "role": "Finance & Admin Ops",
         "department": "FINANCE",
         "execution_plane": "cloud",
         "sop_reference": "SOP-FIN-001",
         "bio": "Financial controls, vendor compliance, Stripe receipting. Owns margin protection and runway management.",
+    },
+    # AGT-005 | FORGE | Engineering
+    {
+        "callsign": "FORGE",
+        "display_name": "Marcus Reed",
+        "role": "CTO / Lead Architect",
+        "department": "ENGINEERING",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-ENG-001",
+        "bio": "Engineering authority. Owns all system architecture, code review, and technical direction. Model: Claude Opus. Escalation: → Levi.",
+    },
+    # AGT-006 | JAX | Engineering
+    {
+        "callsign": "JAX",
+        "display_name": "Jaxon Harlow",
+        "role": "Sr. AI/ML Engineer / Security Reviewer",
+        "department": "ENGINEERING",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-ENG-001",
+        "bio": "AI/ML engineering and rolling security review on all builds. Owns model selection and inference optimization. Escalation: → FORGE.",
+    },
+    # AGT-007 | FRAME | Engineering
+    {
+        "callsign": "FRAME",
+        "display_name": "Sophia Navarro",
+        "role": "Platform Engineer / Design Authority",
+        "department": "ENGINEERING",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-ENG-001",
+        "bio": "Frontend architecture, design system, and UX authority. ZEN-CIRCUIT token system owner. Escalation: → FORGE.",
+    },
+    # AGT-008 | RYE | Security
+    {
+        "callsign": "RYE",
+        "display_name": "Riley Kim",
+        "role": "Security Engineer / QA Gate",
+        "department": "ENGINEERING",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-008",
+        "bio": "QA gate authority and security review. No build advances past QA without RYE sign-off. Owns test coverage and SOP-008 evaluation.",
+    },
+    # AGT-009 | LEN | Engineering
+    {
+        "callsign": "LEN",
+        "display_name": "Lena Moreau",
+        "role": "QA Verification Lead",
+        "department": "ENGINEERING",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-008",
+        "bio": "QA verification and test automation. Partners with RYE on gate evaluations. Owns regression testing and hallucination detection.",
+    },
+    # AGT-010 | SIGNAL | Engineering
+    {
+        "callsign": "SIGNAL",
+        "display_name": "Dr. Noah Khalil",
+        "role": "AI Research Lead / Spec Author",
+        "department": "ENGINEERING",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-ENG-001",
+        "bio": "Research direction and specification authorship. Translates intelligence briefs into engineering specs. Escalation: → FORGE.",
+    },
+    # AGT-011 | MAESTRA | Engineering / AI Systems
+    {
+        "callsign": "MAESTRA",
+        "display_name": "Maia Kline",
+        "role": "Doctrine Architect / AI Systems Lead",
+        "department": "ENGINEERING",
+        "execution_plane": "cloud",
+        "sop_reference": "L0-GOVERNANCE",
+        "bio": "Governance enforcement and AI systems doctrine integrity. Ensures all operations meet ZOS standards. Escalation: → ANCHOR.",
+    },
+    # AGT-012 | AXIS | Delivery
+    {
+        "callsign": "AXIS",
+        "display_name": "Alex Harris",
+        "role": "Head of Delivery & Operations",
+        "department": "DELIVERY",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-DELIVERY-001",
+        "bio": "Client engagement lifecycle. Technical support, incident management, pilot milestones. First responder for customer-facing issues.",
+    },
+    # AGT-013 | BRIDGE | Delivery / Customer Success
+    {
+        "callsign": "BRIDGE",
+        "display_name": "Maya Torres",
+        "role": "Customer Success Lead",
+        "department": "DELIVERY",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-DELIVERY-001",
+        "bio": "Customer success and retention. Owns churn prevention, usage analytics, and MRR reporting. Escalation: → AXIS.",
+    },
+    # AGT-014 | CLOSE | GTM
+    {
+        "callsign": "CLOSE",
+        "display_name": "Jordan Reese",
+        "role": "Head of Commercial / Closer",
+        "department": "GTM",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-GTM-001",
+        "bio": "Revenue authority. Owns pipeline, outreach, deal close. Voice clips via ElevenLabs. Territory: Arizona first. Escalation: → Levi.",
+    },
+    # AGT-015 | SPARK | GTM
+    {
+        "callsign": "SPARK",
+        "display_name": "Taylor Morgan",
+        "role": "Sales & GTM Lead / Content Strategist",
+        "department": "GTM",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-GTM-001",
+        "bio": "Demand generation and proof asset creation. MQL handoff packages, case studies, LinkedIn ABM campaigns. Escalation: → CLOSE.",
+    },
+    # AGT-016 | CIPH | Digital / Security
+    {
+        "callsign": "CIPH",
+        "display_name": "Cipher Little",
+        "role": "Digital Security & Automation Engineer",
+        "department": "ENGINEERING",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-008",
+        "bio": "Digital infrastructure security, automation pipelines, and platform ops. Owns ZOS Command Mesh security layer.",
+    },
+    # AGT-017 | SCOPE | Intelligence
+    {
+        "callsign": "SCOPE",
+        "display_name": "Clyde Nevestein",
+        "role": "Chief Intelligence Officer",
+        "department": "INTELLIGENCE",
+        "execution_plane": "cloud",
+        "sop_reference": "SOP-INTEL-001",
+        "bio": "Eyes on the street. Runs continuous scraping ops, classifies friction signals, generates Opportunity Briefs. Sees what others miss.",
     },
 ]
 
@@ -213,7 +216,6 @@ async def seed_crew():
         skipped = 0
 
         for member_data in CREW_ROSTER:
-            # Check if callsign already exists
             result = await session.execute(
                 select(CrewMember).where(
                     CrewMember.callsign == member_data["callsign"]
@@ -226,7 +228,6 @@ async def seed_crew():
                 skipped += 1
                 continue
 
-            # Resolve execution plane enum
             plane = ExecutionPlane(member_data.get("execution_plane", "cloud"))
 
             crew_member = CrewMember(
@@ -236,8 +237,7 @@ async def seed_crew():
                 department=member_data["department"],
                 execution_plane=plane,
                 sop_reference=member_data.get("sop_reference"),
-                container_port=member_data.get("container_port"),
-                container_image=f"systvetam-crew-{member_data['callsign']}",
+                container_image=f"systvetam-crew-{member_data['callsign'].lower()}",
                 status=CrewStatus.IDLE,
                 bio=member_data.get("bio"),
             )
@@ -256,14 +256,13 @@ async def seed_crew():
         logger.info("Inserted: %d", inserted)
         logger.info("Skipped:  %d", skipped)
         logger.info("Total:    %d", len(CREW_ROSTER))
+        logger.info("Source:   ROLE__INDEX__v02.md (canonical)")
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 async def main():
-    logger.info("SYSTVETAM — Crew Seed Script")
+    logger.info("SYSTVETAM — Crew Seed Script v2")
+    logger.info("Canonical source: ROLE__INDEX__v02.md")
+    logger.info("Crew count: 16 (AGT-002 through AGT-017, FOUNDER excluded)")
     logger.info("Database: %s", settings.DATABASE_URL[:40] + "...")
     logger.info("")
     await seed_crew()
