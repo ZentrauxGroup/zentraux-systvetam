@@ -252,7 +252,7 @@ class Task(Base):
             "task_type IN ("
             "'STANDARD','INTELLIGENCE_BRIEF','BUILD_FROM_INTEL',"
             "'OPPORTUNITY','GTM_CAMPAIGN','VOICE_OUTREACH',"
-            "'SECURITY_REVIEW','QA_EVALUATION','CHANGE_REQUEST'"
+            "'SECURITY_REVIEW','QA_EVALUATION'"
             ")",
             name="valid_task_type",
         ),

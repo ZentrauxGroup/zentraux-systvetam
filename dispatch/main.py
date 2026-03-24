@@ -103,24 +103,10 @@ app = FastAPI(
 # CORS — locked to known origins in production
 # ---------------------------------------------------------------------------
 
-# Read CORS_ORIGINS from env if set (supports "*" or comma-separated list)
-_cors_env = getattr(settings, "CORS_ORIGINS", None)
-if _cors_env and _cors_env.strip() == "*":
-    ALLOWED_ORIGINS: list[str] = ["*"]
-elif _cors_env:
-    ALLOWED_ORIGINS: list[str] = [o.strip() for o in _cors_env.split(",")]
-else:
-    ALLOWED_ORIGINS: list[str] = [
-        "https://tower.zentrauxgroup.com",
-        "https://api.zentrauxgroup.com",
-    ]
-    if settings.ZOS_ENV == "development":
-        ALLOWED_ORIGINS += [
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:5173",
-        ]
+# Use settings.allowed_origins_list — reads ALLOWED_ORIGINS env var,
+# falls back to tower.zentrauxgroup.com + api.zentrauxgroup.com in production,
+# adds localhost variants in development.
+ALLOWED_ORIGINS: list[str] = settings.allowed_origins_list
 
 app.add_middleware(
     CORSMiddleware,
