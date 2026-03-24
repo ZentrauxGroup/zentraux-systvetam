@@ -1,15 +1,13 @@
 # SYSTVETAM — Central Dispatch Dockerfile
 # Zentraux Group LLC
 #
-# Multi-stage build. Python 3.12 slim. No bloat.
-# Runs on Railway (production) and Docker Compose (local dev).
-#
-# Alembic migrations run BEFORE uvicorn starts — tables guaranteed
-# to exist before the app accepts its first request.
+# Python 3.12 slim.
+# Schema created by FastAPI lifespan (raw SQL, idempotent).
+# No Alembic in CMD — tables guaranteed by startup sequence in main.py.
 
 FROM python:3.12-slim AS base
 
-# System deps for asyncpg and Docker SDK
+# System deps for asyncpg
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
@@ -36,6 +34,5 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
 
 EXPOSE 8000
 
-# Pre-start: Alembic runs from /app/dispatch where alembic.ini lives.
-# Then uvicorn starts the app. Tables are guaranteed before first request.
-CMD sh -c 'cd /app/dispatch && alembic upgrade head && uvicorn dispatch.main:app --host 0.0.0.0 --port ${PORT:-8000} --ws-ping-interval 30 --ws-ping-timeout 10'
+# Tables created by lifespan Block 1 (raw SQL, IF NOT EXISTS) — no Alembic in CMD.
+CMD sh -c 'uvicorn dispatch.main:app --host 0.0.0.0 --port ${PORT:-8000} --ws-ping-interval 30 --ws-ping-timeout 10'
