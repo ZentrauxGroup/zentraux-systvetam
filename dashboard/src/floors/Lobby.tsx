@@ -14,7 +14,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, Database, Radio, Wifi, ChevronRight, Shield } from 'lucide-react';
-import axios from 'axios';
+import { client } from '@/api/client';
 import { useTowerStore } from '@/store';
 import { statusColorMap, statusAnimationMap, type CrewStatusKey } from '@/design/tokens';
 import type { StatusResponse, CrewListResponse, TaskListResponse } from '@/types';
@@ -31,17 +31,17 @@ export function Lobby() {
     const load = async () => {
       try {
         const [statusRes, crewRes, gateRes] = await Promise.allSettled([
-          axios.get<StatusResponse>('/api/status'),
-          axios.get<CrewListResponse>('/api/crew'),
-          axios.get<TaskListResponse>('/api/gates/pending?limit=1'),
+          client.get<StatusResponse>('/status'),
+          client.get<CrewListResponse>('/crew'),
+          client.get<TaskListResponse>('/gates/pending?limit=1'),
         ]);
 
         if (statusRes.status === 'fulfilled') setSystemStatus(statusRes.value.data);
         if (crewRes.status === 'fulfilled') {
-          updateCrew(crewRes.value.data.crew);
-          setTaskCount(crewRes.value.data.executing_count);
+          updateCrew(crewRes.value.data.crew ?? []);
+          setTaskCount(crewRes.value.data.executing_count ?? 0);
         }
-        if (gateRes.status === 'fulfilled') setGateCount(gateRes.value.data.total);
+        if (gateRes.status === 'fulfilled') setGateCount(gateRes.value.data.total ?? 0);
       } catch {
         // Partial failure is fine — lobby still renders
       }

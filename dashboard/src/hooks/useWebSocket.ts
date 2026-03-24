@@ -13,7 +13,10 @@ import { useTowerStore } from '@/store';
 import { TIMING } from '@/design/tokens';
 import type { WsEvent, Receipt } from '@/types';
 
-const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`;
+const API_BASE =
+  (import.meta.env.VITE_API_URL as string | undefined) ??
+  `${window.location.protocol}//${window.location.host}`;
+const WS_URL = API_BASE.replace(/^https/, 'wss').replace(/^http/, 'ws') + '/ws';
 
 export function useWebSocket(): void {
   const wsRef = useRef<WebSocket | null>(null);
