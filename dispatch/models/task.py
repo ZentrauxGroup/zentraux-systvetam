@@ -130,7 +130,7 @@ class Task(Base):
 
     # --- Classification ---
     task_type: Mapped[TaskType] = mapped_column(
-        Enum(TaskType, name="task_type", create_constraint=True),
+        Enum(TaskType, name="task_type", create_type=False, create_constraint=True),
         nullable=False,
         default=TaskType.STANDARD,
     )
@@ -160,7 +160,7 @@ class Task(Base):
 
     # --- State Machine ---
     status: Mapped[TaskStatus] = mapped_column(
-        Enum(TaskStatus, name="task_status", create_constraint=True),
+        Enum(TaskStatus, name="task_status", create_type=False, create_constraint=True),
         nullable=False,
         default=TaskStatus.NEW,
         index=True,

@@ -66,7 +66,7 @@ class Receipt(Base):
 
     # --- Classification ---
     receipt_type: Mapped[ReceiptType] = mapped_column(
-        Enum(ReceiptType, name="receipt_type", create_constraint=True),
+        Enum(ReceiptType, name="receipt_type", create_type=False, create_constraint=True),
         nullable=False,
     )
     sop_reference: Mapped[str | None] = mapped_column(

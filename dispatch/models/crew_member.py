@@ -98,7 +98,7 @@ class CrewMember(Base):
 
     # --- Execution Configuration ---
     execution_plane: Mapped[ExecutionPlane] = mapped_column(
-        Enum(ExecutionPlane, name="execution_plane", create_constraint=True),
+        Enum(ExecutionPlane, name="execution_plane", create_type=False, create_constraint=True),
         nullable=False,
         default=ExecutionPlane.CLOUD,
         comment="Default inference backend — cloud or local",
@@ -116,7 +116,7 @@ class CrewMember(Base):
 
     # --- Live State ---
     status: Mapped[CrewStatus] = mapped_column(
-        Enum(CrewStatus, name="crew_status", create_constraint=True),
+        Enum(CrewStatus, name="crew_status", create_type=False, create_constraint=True),
         nullable=False,
         default=CrewStatus.IDLE,
         index=True,
