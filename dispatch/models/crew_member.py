@@ -152,7 +152,6 @@ class CrewMember(Base):
     # --- Relationships ---
     tasks: Mapped[list["Task"]] = relationship(
         "Task",
-        back_populates="crew_member",
         lazy="selectin",
         foreign_keys="Task.assigned_to",
     )
