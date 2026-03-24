@@ -45,9 +45,37 @@ async def lifespan(app: FastAPI):
 
     # Block 1: Create all tables on startup (idempotent — safe every boot)
     try:
+        from sqlalchemy import text as _text
         from dispatch.database import Base, engine
         from dispatch.models import task, crew_member, receipt  # noqa: F401
         async with engine.begin() as _conn:
+            # Pre-create PostgreSQL ENUM types with duplicate protection
+            # Prevents create_all failure when types exist from previous deploys
+            _enum_stmts = [
+                """DO $$ BEGIN
+                CREATE TYPE crew_status AS ENUM ('ACTIVE','IDLE','EXECUTING','ERROR','OFFLINE');
+                EXCEPTION WHEN duplicate_object THEN null;
+                END $$;""",
+                """DO $$ BEGIN
+                CREATE TYPE execution_plane AS ENUM ('cloud','local');
+                EXCEPTION WHEN duplicate_object THEN null;
+                END $$;""",
+                """DO $$ BEGIN
+                CREATE TYPE task_status AS ENUM ('NEW','ASSIGNED','EXECUTING','QA_GATE','LEVI_GATE','DEPLOYING','COMPLETE','RECEIPTED','FAILED');
+                EXCEPTION WHEN duplicate_object THEN null;
+                END $$;""",
+                """DO $$ BEGIN
+                CREATE TYPE task_type AS ENUM ('STANDARD','INTELLIGENCE_BRIEF','BUILD_FROM_INTEL','OPPORTUNITY','GTM_CAMPAIGN','VOICE_OUTREACH','SECURITY_REVIEW','QA_EVALUATION');
+                EXCEPTION WHEN duplicate_object THEN null;
+                END $$;""",
+                """DO $$ BEGIN
+                CREATE TYPE receipt_type AS ENUM ('TASK_CREATED','TASK_ASSIGNED','TASK_COMPLETE','TASK_RECEIPTED','GATE_APPROVED','GATE_RETURNED','CREW_ACTIVATED','CREW_DEACTIVATED','QA_EVALUATION','QA_PASSED','QA_FAILED','SYSTEM_EVENT','ERROR_LOGGED','CHANGE_REQUEST','VENDOR_ONBOARD','FINANCIAL_APPROVAL');
+                EXCEPTION WHEN duplicate_object THEN null;
+                END $$;""",
+            ]
+            for _stmt in _enum_stmts:
+                await _conn.execute(_text(_stmt))
+            print("[DISPATCH] ENUM types verified/created")
             await _conn.run_sync(Base.metadata.create_all)
         print("[DISPATCH] Tables created/verified — schema ready")
     except Exception as _e:
