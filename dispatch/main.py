@@ -43,10 +43,11 @@ async def lifespan(app: FastAPI):
     """
     # — Startup —
 
-    # Block 1: ENUM types only — tables are managed by Alembic pre-start
+    # Block 1: ENUM types + raw SQL table creation (idempotent, guaranteed)
     try:
         from sqlalchemy import text as _text
         async with engine.begin() as _conn:
+            # Step A: ENUM types (safe — duplicate_object caught)
             _enum_stmts = [
                 """DO $$ BEGIN
                 CREATE TYPE crew_status AS ENUM ('ACTIVE','IDLE','EXECUTING','ERROR','OFFLINE');
@@ -71,10 +72,92 @@ async def lifespan(app: FastAPI):
             ]
             for _stmt in _enum_stmts:
                 await _conn.execute(_text(_stmt))
-        print("[DISPATCH] ENUM types verified/created")
-        print("[DISPATCH] Schema managed by Alembic — tables pre-created at container start")
+            print("[DISPATCH] ENUM types verified/created")
+
+            # Step B: Tables — raw SQL CREATE TABLE IF NOT EXISTS
+            # Same engine, same transaction, guaranteed to run after ENUMs exist
+            await _conn.execute(_text("""
+                CREATE TABLE IF NOT EXISTS crew_members (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    callsign VARCHAR(50) NOT NULL,
+                    display_name VARCHAR(100) NOT NULL,
+                    role VARCHAR(200) NOT NULL,
+                    department VARCHAR(50) NOT NULL,
+                    sop_reference VARCHAR(50),
+                    execution_plane execution_plane NOT NULL DEFAULT 'cloud',
+                    container_image VARCHAR(200),
+                    container_port INTEGER,
+                    status crew_status NOT NULL DEFAULT 'IDLE',
+                    container_id VARCHAR(80),
+                    current_task_ref VARCHAR(30),
+                    last_heartbeat TIMESTAMPTZ,
+                    bio TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    CONSTRAINT uq_crew_members_callsign UNIQUE (callsign)
+                );
+            """))
+            await _conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_crew_members_callsign ON crew_members (callsign);"))
+            await _conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_crew_members_status ON crew_members (status);"))
+            await _conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_crew_department_status ON crew_members (department, status);"))
+
+            await _conn.execute(_text("""
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    task_ref VARCHAR(30) NOT NULL,
+                    title VARCHAR(500) NOT NULL,
+                    description TEXT,
+                    output TEXT,
+                    task_type task_type NOT NULL DEFAULT 'STANDARD',
+                    source VARCHAR(50),
+                    department VARCHAR(50),
+                    assigned_to UUID REFERENCES crew_members(id),
+                    requested_by VARCHAR(50) NOT NULL DEFAULT 'AGT-001',
+                    status task_status NOT NULL DEFAULT 'NEW',
+                    priority INTEGER NOT NULL DEFAULT 3,
+                    qa_result JSONB,
+                    levi_note TEXT,
+                    intel_brief_id UUID,
+                    container_id VARCHAR(80),
+                    execution_plane VARCHAR(20),
+                    payload JSONB,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    assigned_at TIMESTAMPTZ,
+                    executing_at TIMESTAMPTZ,
+                    completed_at TIMESTAMPTZ,
+                    receipted_at TIMESTAMPTZ,
+                    CONSTRAINT uq_tasks_task_ref UNIQUE (task_ref)
+                );
+            """))
+            await _conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_tasks_task_ref ON tasks (task_ref);"))
+            await _conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_tasks_status ON tasks (status);"))
+            await _conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_tasks_department ON tasks (department);"))
+            await _conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_tasks_assigned_to ON tasks (assigned_to);"))
+
+            await _conn.execute(_text("""
+                CREATE TABLE IF NOT EXISTS receipts (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    receipt_ref VARCHAR(120) NOT NULL,
+                    receipt_type receipt_type NOT NULL,
+                    task_id UUID REFERENCES tasks(id),
+                    crew_member_id UUID REFERENCES crew_members(id),
+                    issued_by VARCHAR(50) NOT NULL DEFAULT 'SYSTEM',
+                    summary TEXT NOT NULL,
+                    payload JSONB,
+                    sop_reference VARCHAR(50),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    CONSTRAINT uq_receipts_receipt_ref UNIQUE (receipt_ref)
+                );
+            """))
+            await _conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_receipts_receipt_ref ON receipts (receipt_ref);"))
+            await _conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_receipts_receipt_type ON receipts (receipt_type);"))
+            await _conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_receipts_task_id ON receipts (task_id);"))
+            await _conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_receipts_created_at ON receipts (created_at);"))
+
+            print("[DISPATCH] Tables verified/created — crew_members, tasks, receipts")
     except Exception as _e:
-        print(f"[DISPATCH] ENUM warning: {_e}")
+        print(f"[DISPATCH] CRITICAL: Schema init failed: {_e}")
+        raise  # fail hard — no point starting without tables
+
 
     # Block 2: Auto-seed crew on first boot (idempotent — skips if crew exists)
     try:
